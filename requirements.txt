@@ -1,0 +1,4 @@
+imap-tools
+python-dotenv
+requests
+schedule
