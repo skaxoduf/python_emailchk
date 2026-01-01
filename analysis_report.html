@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>이메일 확인 프로그램 분석 보고서</title>
+    <style>
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; padding: 40px; background: white; max-width: 800px; margin: 0 auto; }
+        h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+        h2 { margin-top: 30px; border-left: 5px solid #007bff; padding-left: 10px; }
+        h3 { margin-top: 20px; color: #555; }
+        p, li { line-height: 1.6; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .mermaid { margin: 20px 0; text-align: center; }
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</head>
+<body>
+
+<h1>이메일 확인 프로그램 분석 보고서</h1>
+
+<p>이 문서는 <code>python_emailchk</code> 프로젝트의 구조와 동작 원리를 분석한 보고서입니다.</p>
+
+<h2>1. 시스템 개요</h2>
+<p>이 프로그램은 <strong>업무용 이메일 알림 자동화 시스템</strong>입니다. 주기적으로 사용자의 이메일 계정(IMAP)에 접속하여 읽지 않은 메일을 확인하고, 설정된 필터 조건(날짜, 발신자, 제목 키워드)에 맞는 중요한 메일이 발견되면 <strong>텔레그램</strong>으로 즉시 알림을 발송합니다.</p>
+
+<h2>2. 아키텍처 다이어그램</h2>
+<div class="mermaid">
+graph TD
+    User((사용자)) -->|프로그램 실행| Main[main.py]
+    
+    subgraph 초기화 [초기 설정 및 스케줄링]
+        Env[.env 파일] -->|환경변수| Config[config.py]
+        Config -->|설정 주입| Main
+        Config -->|설정 주입| Checker[email_checker.py]
+        Config -->|설정 주입| Notifier[notifier.py]
+        Main -->|스케줄러 시작| Schedule{스케줄러}
+    end
+
+    subgraph 반복 [작업 실행 루프]
+        Schedule -->|설정된 주기마다| Job[job 함수 실행]
+        Job -->|호출| Checker
+    end
+
+    subgraph 로직 [이메일 확인 프로세스]
+        Checker -->|1. 로그인| MailServer[("이메일 서버 (IMAP)")]
+        MailServer -->|2. 안 읽은 메일 조회| Filter{3. 필터링}
+        
+        Filter -- 조건 불일치 --> Ignore[무시]
+        Filter -- 조건 일치 --> NewMail[새 이메일 목록]
+        
+        subgraph 필터조건
+            Cond1[날짜 필터]
+            Cond2[보낸사람 필터]
+            Cond3[제목 키워드]
+        end
+        Cond1 -.-> Filter
+        Cond2 -.-> Filter
+        Cond3 -.-> Filter
+    end
+
+    subgraph 알림 [알림 발송]
+        NewMail -->|데이터 반환| Job
+        Job -->|메시지 구성| Notifier
+        Notifier -->|HTTP POST| TeleAPI["텔레그램 Bot API"]
+        TeleAPI -->|푸시 알림| UserDevice[("사용자 텔레그램")]
+    end
+</div>
+
+<h2>3. 핵심 컴포넌트 분석</h2>
+
+<h3>1) Main Module (<code>main.py</code>)</h3>
+<ul>
+    <li><strong>역할</strong>: 프로그램의 진입점(Entry Point)이자 컨트롤 타워입니다.</li>
+    <li><strong>주요 기능</strong>:
+        <ul>
+            <li><code>schedule</code> 라이브러리를 사용하여 주기적인 작업을 관리합니다.</li>
+            <li><code>check_new_emails()</code> 함수를 호출하여 결과를 받습니다.</li>
+            <li>결과가 있으면 메시지를 포맷팅하여 <code>send_telegram_alert()</code>를 호출합니다.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>2) Email Checker Module (<code>email_checker.py</code>)</h3>
+<ul>
+    <li><strong>역할</strong>: 실제 이메일 서버와 통신하고 데이터를 필터링하는 핵심 로직 담당입니다.</li>
+    <li><strong>주요 기능</strong>:
+        <ul>
+            <li><code>imap_tools</code>를 사용하여 IMAP 서버에 로그인합니다.</li>
+            <li><code>config.TARGET_START_DATE</code> 등을 반영하여 <strong>서버 측 1차 필터링</strong>을 수행합니다.</li>
+            <li>가져온 메일에 대해 <strong>클라이언트 측 2차 필터링</strong>(발신자, 키워드)을 수행합니다.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>3) Notifier Module (<code>notifier.py</code>)</h3>
+<ul>
+    <li><strong>역할</strong>: 외부 시스템(텔레그램)으로의 알림 발송을 전담합니다.</li>
+    <li><strong>주요 기능</strong>:
+        <ul>
+            <li><code>requests</code> 라이브러리를 사용해 텔레그램 Bot API에 HTTP POST 요청을 보냅니다.</li>
+        </ul>
+    </li>
+</ul>
+
+<h3>4) Configuration Module (<code>config.py</code>)</h3>
+<ul>
+    <li><strong>역할</strong>: 환경 변수(<code>.env</code>)를 로드하여 파이썬 변수로 매핑합니다.</li>
+    <li><strong>주요 기능</strong>:
+        <ul>
+            <li><code>dotenv</code> 라이브러리로 <code>.env</code> 파일을 읽습니다.</li>
+            <li>문자열 데이터를 파이썬 객체(리스트 등)로 전처리합니다.</li>
+        </ul>
+    </li>
+</ul>
+
+<h2>4. 데이터 흐름 (Data Flow)</h2>
+<ol>
+    <li><strong>설정 로드</strong>: 프로그램 시작 시 <code>.env</code>에서 계정 정보, 필터링 조건을 읽어 메모리에 적재합니다.</li>
+    <li><strong>주기적 실행</strong>: <code>config.CHECK_INTERVAL</code>(기본 60초)마다 <code>job()</code> 함수가 트리거됩니다.</li>
+    <li><strong>메일 수집</strong>: <code>email_checker</code>가 IMAP 서버에 접속하여 '읽지 않은(Unseen)' 메일을 요청합니다.</li>
+    <li><strong>조건 검사</strong>: 날짜, 발신자, 키워드 등의 조건을 검사합니다.</li>
+    <li><strong>알림 발송</strong>: 조건에 맞는 메일이 있으면 텔레그램 메시지를 전송합니다.</li>
+</ol>
+
+</body>
+</html>

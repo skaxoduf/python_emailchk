@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            background-color: #1E1E1E !important;
+            /* 강제 적용 */
+            margin: 0;
+            padding: 0;
+            width: 1200px;
+            height: 1400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .mermaid {
+            background-color: #1E1E1E;
+        }
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            themeVariables: {
+                primaryColor: '#00BFFF',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#00BFFF',
+                lineColor: '#00BFFF',
+                secondaryColor: '#2D2D30',
+                tertiaryColor: '#252526',
+                mainBkg: '#1E1E1E',
+                nodeBorder: '#00BFFF'
+            }
+        });
+    </script>
+</head>
+
+<body id="capture">
+
+    <div class="mermaid">
+        graph TD
+        User((사용자)) -->|프로그램 실행| Main[main.py: 메인]
+
+        subgraph Config [초기 설정]
+        Env[.env] --> Conf[config.py]
+        Conf --> Main
+        Conf --> Check[email_checker.py]
+        Conf --> Noti[notifier.py]
+        end
+
+        subgraph Loop [메인 프로세스]
+        Main -->|주기적 실행| Job[Job 함수]
+        Job -->|호출| Check
+        end
+
+        subgraph Logic [이메일 처리]
+        Check -->|IMAP 로그인| Server[("Mail Server")]
+        Server -->|Fetch| Filter{필터링}
+        Filter -- Pass --> New[새 메일]
+        Filter -- Fail --> Ignore[무시]
+        end
+
+        subgraph Alert [알림 시스템]
+        New -->|Return| Job
+        Job -->|Format| Noti
+        Noti -->|API| Tele["Telegram"]
+        end
+    </div>
+
+</body>
+
+</html>
